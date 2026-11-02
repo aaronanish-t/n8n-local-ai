@@ -10,20 +10,23 @@ permissions:
 
 jobs:
   test:
-    name: Workflow tests
+    name: Workflow tests (Node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version: ${{ matrix.node-version }}
       - run: npm test
 
   compose:
     name: Compose config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate docker-compose.yml with the example vault
         run: docker compose config --quiet
       - name: Validate docker-compose.yml with a custom vault path
