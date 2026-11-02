@@ -1,0 +1,33 @@
+name: n8n-local
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=${TIMEZONE:-Asia/Kolkata}
+      - TZ=${TIMEZONE:-Asia/Kolkata}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_DIAGNOSTICS_ENABLED=false
+      # Folders the Read/Write Files nodes may use
+      - N8N_RESTRICT_FILE_ACCESS_TO=/files;/vault
+    extra_hosts:
+      # Lets n8n reach Ollama on this PC at http://host.docker.internal:11434
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./files:/files
+      # Obsidian vault: read-only, except Inbox/ where workflows write notes
+      - ${VAULT_PATH:-./example-vault}:/vault:ro
+      - ${VAULT_PATH:-./example-vault}/Inbox:/vault/Inbox
+
+volumes:
+  n8n_data:

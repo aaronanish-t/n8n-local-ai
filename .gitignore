@@ -1,0 +1,18 @@
+# Local settings (vault path)
+.env
+
+# Files workflows read and write at runtime
+files/*
+!files/.gitkeep
+
+# Notes the briefing workflow writes into the example vault
+example-vault/Inbox/*
+!example-vault/Inbox/.gitkeep
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+node_modules/
