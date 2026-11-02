@@ -1,0 +1,74 @@
+{
+  "name": "01 Local Chat (Ollama)",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "8d6f0c2a-1b1e-4c7a-9e51-0a1f3c2b7d01",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [0, 0],
+      "webhookId": "4f2e9b61-7c3d-4a8e-b0d2-5e6f7a8b9c01"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "You are a helpful study assistant for a computer science student. Answer clearly and briefly. If you are not sure, say so."
+            }
+          ]
+        }
+      },
+      "id": "2a7c4e90-5d3b-4f61-8c2e-9b0a1d3e5f02",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "6b1d3f85-0e2a-4c97-a4b3-7d8e9f0a1b03",
+      "name": "Ollama Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [260, 220]
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

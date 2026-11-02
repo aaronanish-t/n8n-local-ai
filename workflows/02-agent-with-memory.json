@@ -1,0 +1,110 @@
+{
+  "name": "02 Agent with Memory (Ollama)",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "a1c2e3f4-0b1d-4e2f-8a3b-1c2d3e4f5a01",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [0, 0],
+      "webhookId": "b7d8e9f0-1a2b-4c3d-9e4f-5a6b7c8d9e02"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=You are a helpful study assistant for a computer science student. Answer clearly and briefly. If you are not sure, say so.\n\nThe current date and time is {{ $now.format('yyyy-MM-dd HH:mm') }} (India Standard Time).\n\nFor any arithmetic, always use the Calculator tool instead of working it out yourself.",
+          "maxIterations": 5
+        }
+      },
+      "id": "c3e4f5a6-2d3f-4a5b-9c6d-3e4f5a6b7c03",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [280, 0]
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:3b",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "d4f5a6b7-3e4a-4b6c-8d7e-4f5a6b7c8d04",
+      "name": "Ollama Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [160, 240]
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 10
+      },
+      "id": "e5a6b7c8-4f5b-4c7d-9e8f-5a6b7c8d9e05",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [320, 240]
+    },
+    {
+      "parameters": {},
+      "id": "f6b7c8d9-5a6c-4d8e-8f9a-6b7c8d9e0f06",
+      "name": "Calculator",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [480, 240]
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
