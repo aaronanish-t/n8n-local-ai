@@ -13,7 +13,7 @@ Self-hosted [n8n](https://n8n.io) in Docker that uses a local model through [Oll
   ollama pull llama3.2:3b
   ```
 
-- Node.js 20 or newer, only for running the tests
+- Node.js 22 or newer, only for running the tests
 
 ## Setup
 
