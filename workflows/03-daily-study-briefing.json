@@ -15,20 +15,21 @@
         "rule": {
           "interval": [
             {
-              "triggerAtHour": 8
+              "field": "cronExpression",
+              "expression": "0 8-23 * * *"
             }
           ]
         }
       },
       "id": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c01",
-      "name": "Every day at 8:00",
+      "name": "Every hour, 8:00 to 23:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [0, 0]
     },
     {
       "parameters": {
-        "fileSelector": "/vault/{Tasks/_Tracker.md,Daily/*.md}",
+        "fileSelector": "/vault/{Tasks/_Tracker.md,Daily/*.md,**/*Morning Briefing.md}",
         "options": {}
       },
       "id": "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d02",
@@ -53,7 +54,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Pull active/open tasks from the tracker and the Next steps from the newest daily note.\nconst items = $input.all();\nlet tracker = '';\nconst daily = [];\n\nfor (const item of items) {\n  const fileName = item.binary?.data?.fileName ?? '';\n  if (fileName === '_Tracker.md') tracker = item.json.text;\n  else daily.push({ fileName, text: item.json.text });\n}\n\nconst tasks = tracker\n  .split('\\n')\n  .filter((line) => /^\\|\\s*(active|open)\\s*\\|/.test(line))\n  .map((line) => {\n    const status = line.split('|')[1].trim();\n    const note = line.match(/\\[\\[([^\\]|\\\\]+)/)?.[1] ?? '';\n    return { status, note, title: note.replace(/^\\d{4}-\\d{2}-\\d{2} /, '') };\n  })\n  .filter((task) => task.note && task.title !== 'n8n Daily Study Briefing');\n\ndaily.sort((a, b) => a.fileName.localeCompare(b.fileName));\nconst latest = daily.at(-1);\nconst nextSteps = (latest?.text.match(/## Next steps\\n([\\s\\S]*?)(\\n## |$)/)?.[1] ?? '')\n  .split('\\n')\n  .filter((line) => line.startsWith('- '))\n  .map((line) => line.replace(/:?\\s*\\[\\[[^\\]]*\\]\\]/g, '').trim());\n\nconst active = tasks.filter((task) => task.status === 'active');\nconst open = tasks.filter((task) => task.status === 'open');\n\nreturn [{\n  json: {\n    today: $now.toFormat('yyyy-MM-dd'),\n    activeList: active.map((task) => `- ${task.title}`).join('\\n') || '- (none)',\n    nextStepsList: nextSteps.join('\\n') || '- (none)',\n    waitingOnMe: open.map((task) => `- [[${task.note}|${task.title}]]`).join('\\n') || '- Nothing',\n    latestDailyName: latest ? latest.fileName.replace(/\\.md$/, '') : '',\n  },\n}];"
+        "jsCode": "// Pull active/open tasks from the tracker and the Next steps from the newest daily note.\n// Hourly runs stop here once today's briefing exists anywhere in the vault; Test run always\n// writes one, under a separate name if today's already exists.\nconst items = $input.all();\nconst today = $now.toFormat('yyyy-MM-dd');\nlet tracker = '';\nconst daily = [];\nlet briefedToday = false;\n\nfor (const item of items) {\n  const fileName = item.binary?.data?.fileName ?? '';\n  if (fileName === '_Tracker.md') tracker = item.json.text;\n  else if (fileName === `${today} Morning Briefing.md`) briefedToday = true;\n  else if (/^\\d{4}-\\d{2}-\\d{2}\\.md$/.test(fileName)) daily.push({ fileName, text: item.json.text });\n}\n\nif (briefedToday && $('Every hour, 8:00 to 23:00').isExecuted) return [];\n\nconst tasks = tracker\n  .split('\\n')\n  .filter((line) => /^\\|\\s*(active|open)\\s*\\|/.test(line))\n  .map((line) => {\n    const status = line.split('|')[1].trim();\n    const note = line.match(/\\[\\[([^\\]|\\\\]+)/)?.[1] ?? '';\n    return { status, note, title: note.replace(/^\\d{4}-\\d{2}-\\d{2} /, '') };\n  })\n  .filter((task) => task.note && task.title !== 'n8n Daily Study Briefing');\n\ndaily.sort((a, b) => a.fileName.localeCompare(b.fileName));\nconst latest = daily.at(-1);\nconst nextSteps = (latest?.text.match(/## Next steps\\n([\\s\\S]*?)(\\n## |$)/)?.[1] ?? '')\n  .split('\\n')\n  .filter((line) => line.startsWith('- '))\n  .map((line) => line.replace(/:?\\s*\\[\\[[^\\]]*\\]\\]/g, '').trim());\n\nconst active = tasks.filter((task) => task.status === 'active');\nconst open = tasks.filter((task) => task.status === 'open');\n\nreturn [{\n  json: {\n    today,\n    briefedToday,\n    activeList: active.map((task) => `- ${task.title}`).join('\\n') || '- (none)',\n    nextStepsList: nextSteps.join('\\n') || '- (none)',\n    waitingOnMe: open.map((task) => `- [[${task.note}|${task.title}]]`).join('\\n') || '- Nothing',\n    latestDailyName: latest ? latest.fileName.replace(/\\.md$/, '') : '',\n  },\n}];"
       },
       "id": "3d4e5f6a-7b8c-4d9e-9f0a-2b3c4d5e6f04",
       "name": "Collect open tasks",
@@ -100,13 +101,29 @@
     },
     {
       "parameters": {
-        "jsCode": "// Wrap the model's text in the vault's note format.\nconst info = $('Collect open tasks').first().json;\nconst body = $input.first().json.text.trim();\nconst links = ['- [[Tasks/_Tracker|Task Tracker]]'];\nif (info.latestDailyName) links.push(`- [[${info.latestDailyName}]]`);\n\nconst content = [\n  '---',\n  `created: ${info.today}`,\n  'type: daily',\n  'tags: [briefing, n8n]',\n  'status: active',\n  '---',\n  `# Morning Briefing ${info.today}`,\n  '',\n  '_Written by the n8n workflow \"03 Daily Study Briefing\" with llama3.2:3b. Check it against the tracker._',\n  '',\n  body,\n  '',\n  '## Waiting on me',\n  info.waitingOnMe,\n  '',\n  '## Links',\n  ...links,\n  '',\n].join('\\n');\n\nreturn [{ json: { fileName: `${info.today} Morning Briefing.md`, content } }];"
+        "jsCode": "// Wrap the model's text and the GitHub summary in the vault's note format.\nconst info = $('Collect open tasks').first().json;\nconst body = $('Write briefing').first().json.text.trim();\nconst github = $input.first().json.markdown ?? '- GitHub activity unavailable';\nconst links = ['- [[Tasks/_Tracker|Task Tracker]]'];\nif (info.latestDailyName) links.push(`- [[${info.latestDailyName}]]`);\n\nconst content = [\n  '---',\n  `created: ${info.today}`,\n  'type: daily',\n  'tags: [briefing, n8n]',\n  'status: active',\n  '---',\n  `# Morning Briefing ${info.today}`,\n  '',\n  '_Written by the n8n workflow \"03 Daily Study Briefing\" with llama3.2:3b. Check it against the tracker._',\n  '',\n  body,\n  '',\n  '## Waiting on me',\n  info.waitingOnMe,\n  '',\n  '## Yesterday on GitHub',\n  github,\n  '',\n  '## Links',\n  ...links,\n  '',\n].join('\\n');\n\n// Never overwrite today's briefing: it may have been edited.\nconst suffix = info.briefedToday ? ` ${$now.toFormat('HHmmss')}` : '';\nreturn [{ json: { fileName: `${info.today} Morning Briefing${suffix}.md`, content } }];"
       },
       "id": "6a7b8c9d-0e1f-4a2b-8c3d-5e6f7a8b9c07",
       "name": "Build note",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1100, 0]
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "GithubActivity04",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a11",
+      "name": "Get GitHub activity",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [1100, 0],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -120,7 +137,7 @@
       "name": "Convert to file",
       "type": "n8n-nodes-base.convertToFile",
       "typeVersion": 1.1,
-      "position": [1320, 0]
+      "position": [1540, 0]
     },
     {
       "parameters": {
@@ -132,14 +149,14 @@
       "name": "Save to vault Inbox",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1.1,
-      "position": [1540, 0]
+      "position": [1760, 0]
     }
   ],
   "connections": {
     "Test run": {
       "main": [[{ "node": "Read tracker and daily notes", "type": "main", "index": 0 }]]
     },
-    "Every day at 8:00": {
+    "Every hour, 8:00 to 23:00": {
       "main": [[{ "node": "Read tracker and daily notes", "type": "main", "index": 0 }]]
     },
     "Read tracker and daily notes": {
@@ -155,6 +172,9 @@
       "ai_languageModel": [[{ "node": "Write briefing", "type": "ai_languageModel", "index": 0 }]]
     },
     "Write briefing": {
+      "main": [[{ "node": "Get GitHub activity", "type": "main", "index": 0 }]]
+    },
+    "Get GitHub activity": {
       "main": [[{ "node": "Build note", "type": "main", "index": 0 }]]
     },
     "Build note": {
