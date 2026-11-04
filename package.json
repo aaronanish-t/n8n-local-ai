@@ -11,5 +11,8 @@
   },
   "scripts": {
     "test": "node --test \"test/*.test.js\""
+  },
+  "devDependencies": {
+    "luxon": "3.7.2"
   }
 }

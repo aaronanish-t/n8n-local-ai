@@ -3,14 +3,25 @@ import assert from 'node:assert/strict';
 import { loadWorkflows, compileCodeNode } from './helpers.js';
 
 const workflows = loadWorkflows();
-const TRIGGER_TYPES = /(Trigger|chatTrigger|manualTrigger)$/;
+const TRIGGER_TYPES = /(Trigger|\.webhook)$/;
 const SUB_NODE_CONNECTIONS = ['ai_languageModel', 'ai_memory', 'ai_tool'];
 
-test('the workflows folder has the three workflows', () => {
-  assert.deepEqual(
-    workflows.map((w) => w.file),
-    ['01-local-chat.json', '02-agent-with-memory.json', '03-daily-study-briefing.json'],
-  );
+test('workflow files are numbered 01, 02, 03 ... with no gaps', () => {
+  assert.ok(workflows.length >= 3);
+  workflows.forEach(({ file }, index) => {
+    assert.match(file, /^\d{2}-[a-z0-9-]+\.json$/);
+    assert.equal(Number(file.slice(0, 2)), index + 1, `${file} is out of sequence`);
+  });
+});
+
+test('workflow ids are unique, and calls to other workflows point at one in this folder', () => {
+  const ids = workflows.map((w) => w.workflow.id).filter(Boolean);
+  assert.equal(new Set(ids).size, ids.length, 'duplicate workflow ids');
+  for (const { file, workflow } of workflows) {
+    for (const n of workflow.nodes.filter((n) => n.type === 'n8n-nodes-base.executeWorkflow')) {
+      assert.ok(ids.includes(n.parameters.workflowId.value), `${file}: ${n.name} calls an unknown workflow`);
+    }
+  }
 });
 
 for (const { file, workflow } of workflows) {

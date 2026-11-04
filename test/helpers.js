@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DateTime } from 'luxon';
+
+export const TIMEZONE = 'Asia/Kolkata';
 
 export const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const workflowsDir = join(root, 'workflows');
@@ -26,34 +29,35 @@ export function node(workflow, name) {
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
 export function compileCodeNode(jsCode) {
-  return new AsyncFunction('$input', '$now', '$', jsCode);
-}
-
-// Minimal stand-in for the Luxon DateTime n8n exposes as $now.
-function fakeNow(isoDate) {
-  return {
-    toFormat(format) {
-      if (format !== 'yyyy-MM-dd') throw new Error(`fakeNow does not support format ${format}`);
-      return isoDate;
-    },
-  };
+  return new AsyncFunction('$input', '$now', '$', 'DateTime', jsCode);
 }
 
 // Runs a Code node's JavaScript the way n8n does in "Run Once for All Items" mode.
-export async function runCodeNode(jsCode, { items = [], today = '2026-01-03', nodeOutputs = {} } = {}) {
+// `now` is an ISO time in the workflow's time zone; `nodeOutputs` maps node names to the
+// items `$('Node')` returns. Nodes listed in `executed` report `isExecuted: true`.
+export async function runCodeNode(
+  jsCode,
+  { items = [], now = '2026-01-03T09:00', nodeOutputs = {}, executed = [] } = {},
+) {
   const $input = { all: () => items, first: () => items[0] };
   const $ = (name) => {
-    if (!(name in nodeOutputs)) throw new Error(`Code node referenced unknown node "${name}"`);
     const output = nodeOutputs[name];
-    return { first: () => output[0], all: () => output, item: output[0] };
+    if (!output && !executed.includes(name)) return { isExecuted: false };
+    return { isExecuted: true, first: () => output?.[0], all: () => output ?? [], item: output?.[0] };
   };
-  return compileCodeNode(jsCode)($input, fakeNow(today), $);
+  const $now = DateTime.fromISO(now, { zone: TIMEZONE });
+  return compileCodeNode(jsCode)($input, $now, $, DateTime);
 }
 
 // Builds the items the "Extract text" node passes on: file text in json, file name in binary.
 export function vaultItems(vault, relativePaths) {
-  return relativePaths.map((path) => ({
-    json: { text: readFileSync(join(vault, path), 'utf8') },
-    binary: { data: { fileName: path.split('/').at(-1) } },
-  }));
+  return relativePaths.map((path) => fileItem(path.split('/').at(-1), readFileSync(join(vault, path), 'utf8')));
+}
+
+export function fileItem(fileName, text) {
+  return { json: { text }, binary: { data: { fileName } } };
+}
+
+export function loadFixture(name) {
+  return JSON.parse(readFileSync(join(root, 'test', 'fixtures', name), 'utf8'));
 }
