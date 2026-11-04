@@ -1,0 +1,111 @@
+{
+  "id": "GithubActivity04",
+  "name": "04 GitHub Activity (sub-workflow)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "a4000001-0000-4000-8000-000000000001",
+      "name": "When called by another workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {},
+      "id": "a4000001-0000-4000-8000-000000000002",
+      "name": "Test run",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a4000001-0000-4000-8000-0000000000a1",
+              "name": "githubUser",
+              "value": "aaronanish-t",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4000001-0000-4000-8000-000000000003",
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 100]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/users/{{ $json.githubUser }}/events/public",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "User-Agent",
+              "value": "n8n-local-ai"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "a4000001-0000-4000-8000-000000000004",
+      "name": "Get public GitHub events",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 100],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turn yesterday's public GitHub events into short Markdown bullets.\nconst start = $now.minus({ days: 1 }).startOf('day');\nconst end = $now.startOf('day');\nconst items = $input.all().map((item) => item.json);\n\nconst MAX_REASON_LENGTH = 120;\nconst failed = items.find((json) => json.error);\nif (failed) {\n  const message = failed.error.message ?? String(failed.error);\n  const reason = /rate limit/i.test(message)\n    ? 'rate limit reached (60 requests an hour per IP without a token)'\n    : message.split('\\n')[0].slice(0, MAX_REASON_LENGTH);\n  return [{ json: { ok: false, count: 0, markdown: `- Could not reach GitHub: ${reason}` } }];\n}\n\nconst pr = (p) => p?.pull_request ?? {};\nconst issue = (p) => p?.issue ?? {};\nconst titled = (prefix, number, title) => `${prefix} #${number}${title ? ` \"${title}\"` : ''}`;\nconst cap = (word) => {\n  const text = String(word || 'updated');\n  return `${text[0].toUpperCase()}${text.slice(1)}`;\n};\n\nfunction describe({ type, repo, payload: rawPayload }) {\n  const payload = rawPayload ?? {};\n  const where = repo?.name ?? 'a repo';\n  switch (type) {\n    case 'PushEvent':\n      return `Pushed to ${where}`;\n    case 'PullRequestEvent': {\n      const action = payload.action === 'closed' && pr(payload).merged ? 'merged' : payload.action;\n      return `${cap(action)} ${titled('PR', payload.number ?? pr(payload).number, pr(payload).title)} in ${where}`;\n    }\n    case 'PullRequestReviewEvent':\n      return `Reviewed ${titled('PR', pr(payload).number, pr(payload).title)} in ${where}`;\n    case 'PullRequestReviewCommentEvent':\n      return `Commented on a review in ${titled('PR', pr(payload).number, pr(payload).title)} in ${where}`;\n    case 'IssuesEvent':\n      return `${cap(payload.action)} ${titled('issue', issue(payload).number, issue(payload).title)} in ${where}`;\n    case 'IssueCommentEvent':\n      return `Commented on ${issue(payload).pull_request ? 'PR' : 'issue'} ${titled('', issue(payload).number, issue(payload).title).trim()} in ${where}`;\n    case 'CreateEvent':\n      return payload.ref_type === 'repository' ? `Created repo ${where}` : `Created ${payload.ref_type} ${payload.ref} in ${where}`;\n    case 'ForkEvent':\n      return `Forked ${where}`;\n    case 'WatchEvent':\n      return `Starred ${where}`;\n    case 'ReleaseEvent':\n      return `Published release ${payload.release?.tag_name ?? ''} in ${where}`.replace('  ', ' ');\n    default:\n      return `${type.replace(/Event$/, '')} in ${where}`;\n  }\n}\n\nconst lines = items\n  .filter((json) => json.type && json.created_at)\n  .filter((json) => {\n    const at = DateTime.fromISO(json.created_at);\n    return at >= start && at < end;\n  })\n  .reverse()\n  .map(describe);\n\nconst counts = new Map();\nfor (const line of lines) counts.set(line, (counts.get(line) ?? 0) + 1);\nconst bullets = [...counts].map(([line, n]) => `- ${line}${n > 1 ? ` (x${n})` : ''}`);\n\nreturn [{\n  json: {\n    ok: true,\n    count: lines.length,\n    markdown: bullets.join('\\n') || '- No public activity',\n  },\n}];"
+      },
+      "id": "a4000001-0000-4000-8000-000000000005",
+      "name": "Summarize yesterday",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 100]
+    }
+  ],
+  "connections": {
+    "When called by another workflow": {
+      "main": [[{ "node": "Settings", "type": "main", "index": 0 }]]
+    },
+    "Test run": {
+      "main": [[{ "node": "Settings", "type": "main", "index": 0 }]]
+    },
+    "Settings": {
+      "main": [[{ "node": "Get public GitHub events", "type": "main", "index": 0 }]]
+    },
+    "Get public GitHub events": {
+      "main": [[{ "node": "Summarize yesterday", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {}
+}
